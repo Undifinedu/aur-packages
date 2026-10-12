@@ -16,6 +16,7 @@ require_command() {
 
 require_command curl
 require_command jq
+require_command awk
 require_command makepkg
 require_command sha256sum
 
@@ -49,8 +50,25 @@ source_url="https://static.mastergo.com/plugins/desktop/macos-arm/MasterGo-${pkg
 curl_retry --output "${tmpdir}/MasterGo-${pkgver}-mac-arm64.dmg" "${source_url}" >/dev/null
 source_sha256="$(sha256sum "${tmpdir}/MasterGo-${pkgver}-mac-arm64.dmg" | awk '{print $1}')"
 
+current_pkgver="$(awk -F= '/^pkgver=/ {print $2; exit}' "${PKGBUILD_PATH}")"
+current_pkgrel="$(awk -F= '/^pkgrel=/ {print $2; exit}' "${PKGBUILD_PATH}")"
+current_sha256="$(awk -F"'" '$2 ~ /^[0-9a-f]{64}$/ { print $2; exit }' "${PKGBUILD_PATH}")"
+
+if [[ "${current_pkgver}" == "${pkgver}" &&
+      "${current_pkgrel}" =~ ^[0-9]+$ &&
+      "${current_sha256}" == "${source_sha256}" ]]; then
+  pkgrel="${current_pkgrel}"
+elif [[ "${current_pkgver}" == "${pkgver}" &&
+        "${current_pkgrel}" =~ ^[0-9]+$ &&
+        "${current_sha256}" =~ ^[0-9a-f]{64}$ ]]; then
+  pkgrel="$((current_pkgrel + 1))"
+else
+  pkgrel=1
+fi
+
 sed -i \
   -e "s/^pkgver=.*/pkgver=${pkgver}/" \
+  -e "s/^pkgrel=.*/pkgrel=${pkgrel}/" \
   -e "0,/^[[:space:]]*'[0-9a-f]\\{64\\}'/{s/^[[:space:]]*'[0-9a-f]\\{64\\}'/  '${source_sha256}'/}" \
   "${PKGBUILD_PATH}"
 
@@ -59,4 +77,4 @@ sed -i \
   makepkg --printsrcinfo > "${SRCINFO_PATH}"
 )
 
-printf '%s\n' "${pkgver}"
+printf '%s-%s\n' "${pkgver}" "${pkgrel}"

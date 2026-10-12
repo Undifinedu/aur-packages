@@ -17,6 +17,7 @@ require_command() {
 
 require_command curl
 require_command rg
+require_command awk
 require_command sha256sum
 require_command makepkg
 
@@ -76,8 +77,28 @@ arm64_pkgbuild_url="${arm64_url//${pkgver}/\$\{pkgver\}}"
 x64_source_line="source_x86_64=(\"ZCode-\${pkgver}-linux-x64.deb::${x64_pkgbuild_url}\")"
 arm64_source_line="source_aarch64=(\"ZCode-\${pkgver}-linux-arm64.deb::${arm64_pkgbuild_url}\")"
 
+current_pkgver="$(awk -F= '/^pkgver=/ {print $2; exit}' "${PKGBUILD_PATH}")"
+current_pkgrel="$(awk -F= '/^pkgrel=/ {print $2; exit}' "${PKGBUILD_PATH}")"
+current_x64_sha256="$(sed -n "s/^sha256sums_x86_64=('\([0-9a-f]\{64\}\)')/\1/p" "${PKGBUILD_PATH}")"
+current_arm64_sha256="$(sed -n "s/^sha256sums_aarch64=('\([0-9a-f]\{64\}\)')/\1/p" "${PKGBUILD_PATH}")"
+
+if [[ "${current_pkgver}" == "${pkgver}" &&
+      "${current_pkgrel}" =~ ^[0-9]+$ &&
+      "${current_x64_sha256}" == "${x64_sha256}" &&
+      "${current_arm64_sha256}" == "${arm64_sha256}" ]]; then
+  pkgrel="${current_pkgrel}"
+elif [[ "${current_pkgver}" == "${pkgver}" &&
+        "${current_pkgrel}" =~ ^[0-9]+$ &&
+        "${current_x64_sha256}" =~ ^[0-9a-f]{64}$ &&
+        "${current_arm64_sha256}" =~ ^[0-9a-f]{64}$ ]]; then
+  pkgrel="$((current_pkgrel + 1))"
+else
+  pkgrel=1
+fi
+
 sed -i \
   -e "s/^pkgver=.*/pkgver=${pkgver}/" \
+  -e "s/^pkgrel=.*/pkgrel=${pkgrel}/" \
   -e "s|^source_x86_64=.*|${x64_source_line}|" \
   -e "s|^source_aarch64=.*|${arm64_source_line}|" \
   -e "s|^sha256sums_x86_64=.*|sha256sums_x86_64=('${x64_sha256}')|" \
@@ -89,4 +110,4 @@ sed -i \
   makepkg --printsrcinfo > "${SRCINFO_PATH}"
 )
 
-printf '%s\n' "${pkgver}"
+printf '%s-%s\n' "${pkgver}" "${pkgrel}"
