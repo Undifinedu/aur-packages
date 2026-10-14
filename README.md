@@ -36,6 +36,7 @@ User-facing notes for the AUR packages maintained in this repository.
 - [mimo-desktop](packages/mimo-desktop/README.md): Xiaomi MiMo desktop app
 - [evox](packages/evox/README.md): EvoMap EvoX self-evolving swarm coding agent (beta channel)
 - [tessoa](packages/tessoa/README.md): GPU-accelerated file manager with split panes, layouts, tags and multiple views
+- [qoder-cn](packages/qoder-cn/README.md): Qoder CN desktop app repackaged from the official Linux deb
 
 ## Renamed Packages
 
@@ -83,6 +84,7 @@ frequently updated packages daily:
 - `photon-studio`
 - `evox`
 - `tessoa`
+- `qoder-cn`
 
 Less frequently updated packages stay on the weekly check:
 

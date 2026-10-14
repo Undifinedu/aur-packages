@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 离线回归测试：验证各包 update.sh 的 pkgrel（打包修订号）判定与校验值替换逻辑。
 # 从 update.sh 里原样抽出代码块，对着临时夹具跑各分支：全程不联网、不改仓库文件。
-# 改动 packages/{zcode,mastergo,opensquilla}/update.sh 后跑：bash scripts/test-update-scripts.sh
+# 改动 packages/{zcode,mastergo,opensquilla,qoder-cn}/update.sh 后跑：bash scripts/test-update-scripts.sh
 # 抽取靠锚点（is_sha256(、current_pkgver=、sed -i、PKGBUILD_PATH}" 等），update.sh 挪动这些锚点时测试会显式失败提醒同步维护。
 
 set -u
@@ -78,10 +78,11 @@ check_block() { # 块 名称 必含片段...
 for s in \
   "${REPO_ROOT}/packages/zcode/update.sh" \
   "${REPO_ROOT}/packages/mastergo/update.sh" \
-  "${REPO_ROOT}/packages/opensquilla/update.sh"; do
+  "${REPO_ROOT}/packages/opensquilla/update.sh" \
+  "${REPO_ROOT}/packages/qoder-cn/update.sh"; do
   bash -n "${s}" || { printf 'SYNTAX FAIL: %s\n' "${s}" >&2; exit 1; }
 done
-printf '语法检查: 通过（3 个脚本）\n'
+printf '语法检查: 通过（4 个脚本）\n'
 
 tmp="$(mktemp -d)"
 trap 'rm -rf "${tmp}"' EXIT
@@ -189,7 +190,20 @@ expect "$(run_m 1.1.0 "$C64" "${tmp}/single")" 1 'mastergo 新版本，归 1'
 expect "$(run_m 1.0.0 "$A64" "${tmp}/broken")" 1 'mastergo 提取失败不虚增，归 1'
 expect "$(run_m 1.0.0 "$A64" "${tmp}/nonum-single")" 1 'mastergo pkgrel 非数字，归 1'
 
-# ---------- sed 替换链路（三个包） ----------
+# ---------- qoder-cn：判定块 ----------
+qblock="$(extract_before "${REPO_ROOT}/packages/qoder-cn/update.sh" 'current_pkgver=' 'sed -i')"
+check_block "${qblock}" 'qoder-cn 判定块' 'pkgrel=1'
+run_q() { # 新版本 新校验值 夹具
+  PKGBUILD_PATH="$3" pkgver="$1" source_sha256="$2" \
+    bash -c "${qblock}; printf '%s\n' \"\${pkgrel}\""
+}
+expect "$(run_q 1.0.0 "$A64" "${tmp}/single")" 5 'qoder-cn 同版本同校验，保持'
+expect "$(run_q 1.0.0 "$C64" "${tmp}/single")" 6 'qoder-cn 同版本校验变化，加 1'
+expect "$(run_q 1.1.0 "$C64" "${tmp}/single")" 1 'qoder-cn 新版本，归 1'
+expect "$(run_q 1.0.0 "$A64" "${tmp}/broken")" 1 'qoder-cn 提取失败不虚增，归 1'
+expect "$(run_q 1.0.0 "$A64" "${tmp}/nonum-single")" 1 'qoder-cn pkgrel 非数字，归 1'
+
+# ---------- sed 替换流程（四个包） ----------
 zchain="$(extract_through "${REPO_ROOT}/packages/zcode/update.sh" 'sed -i' 'PKGBUILD_PATH}"')"
 check_block "${zchain}" 'zcode 替换链路' 's/^pkgver=' 's/^pkgrel=' 'sha256sums_x86_64=' 'sha256sums_aarch64='
 cp "${tmp}/zcode" "${tmp}/zcode-run"
@@ -217,6 +231,19 @@ PKGBUILD_PATH="${tmp}/mastergo-run" pkgver=1.1.0 pkgrel=1 source_sha256="$C64" \
   bash -c "${mchain}"
 mmd5_2="$(md5sum "${tmp}/mastergo-run" | awk '{print $1}')"
 expect "$([[ "${mmd5_1}" == "${mmd5_2}" ]] && echo same || echo diff)" same 'mastergo 链路幂等性'
+
+qchain="$(extract_through "${REPO_ROOT}/packages/qoder-cn/update.sh" 'sed -i' 'PKGBUILD_PATH}"')"
+check_block "${qchain}" 'qoder-cn 替换流程' 's/^pkgver=' 's/^pkgrel=' '0,/'
+cp "${tmp}/single" "${tmp}/qoder-cn-run"
+PKGBUILD_PATH="${tmp}/qoder-cn-run" pkgver=1.1.0 pkgrel=1 source_sha256="$C64" \
+  bash -c "${qchain}"
+qhit=$(grep -cE "^(pkgver=1.1.0|pkgrel=1)|^  '${C64}'$" "${tmp}/qoder-cn-run")
+expect "${qhit}" 3 'qoder-cn 替换流程改写版本/修订/校验值'
+qmd5_1="$(md5sum "${tmp}/qoder-cn-run" | awk '{print $1}')"
+PKGBUILD_PATH="${tmp}/qoder-cn-run" pkgver=1.1.0 pkgrel=1 source_sha256="$C64" \
+  bash -c "${qchain}"
+qmd5_2="$(md5sum "${tmp}/qoder-cn-run" | awk '{print $1}')"
+expect "$([[ "${qmd5_1}" == "${qmd5_2}" ]] && echo same || echo diff)" same 'qoder-cn 替换流程幂等性'
 
 ochain="$(extract_through "${REPO_ROOT}/packages/opensquilla/update.sh" 'sed -i' 'PKGBUILD_PATH}"')"
 check_block "${ochain}" 'opensquilla 替换链路' 's/^pkgver=' 's/^pkgrel=' 'current_dmg_sha256}' 'current_whl_sha256}'

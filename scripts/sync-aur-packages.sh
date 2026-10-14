@@ -36,6 +36,7 @@ DEFAULT_PACKAGES=(
   evox
   tessoa
   ldtk-git
+  qoder-cn
 )
 
 AUR_SSH_KEY="${AUR_SSH_KEY:-${HOME}/.ssh/aur_actions}"

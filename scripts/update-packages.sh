@@ -36,6 +36,7 @@ DEFAULT_PACKAGES=(
   evox
   tessoa
   ldtk-git
+  qoder-cn
 )
 
 if [[ "$#" -gt 0 ]]; then
